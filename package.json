@@ -1,0 +1,29 @@
+{
+  "name": "blr-commuteoptimizer",
+  "version": "2.0.0",
+  "description": "Predictive departure window calculator for Bengaluru commuters. School drop-off waypoints, 4-slot departure curve, PWA, offline support, Google Maps Directions API.",
+  "author": "Hemanth Aragonda <https://github.com/haragonda>",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=18.0.0" },
+  "scripts": {
+    "dev":    "vercel dev",
+    "deploy": "vercel --prod",
+    "lint":   "eslint app.js holidays.js history.js analytics.js api/commute.js sw.js"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "vercel":  "^34.0.0"
+  },
+  "keywords": [
+    "bengaluru", "commute", "google-maps", "directions-api",
+    "pwa", "service-worker", "a11y", "vercel", "serverless",
+    "traffic-prediction", "waypoints"
+  ],
+  "repository": {
+    "type": "git",
+    "url":  "https://github.com/haragonda/BLR-CommuteOptimizer.git"
+  },
+  "homepage": "https://github.com/haragonda/BLR-CommuteOptimizer#readme"
+}

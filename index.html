@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="BLR-CommuteOptimizer: Predictive departure windows for Bengaluru commuters. School drop-offs + office routing with Google Maps historical traffic."/>
+  <meta name="theme-color" content="#f97316"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="CommuteOpt"/>
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json"/>
+  <!-- Apple touch icon (use your generated 192px icon) -->
+  <link rel="apple-touch-icon" href="/public/icons/icon-192.png"/>
+
+  <title>BLR-CommuteOptimizer — Predictive Departure Windows</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+
+  <!--
+    Google Maps JavaScript API — Places library for autocomplete.
+    PUBLIC_MAPS_KEY: A SEPARATE restricted key (Places API only, HTTP referrer restricted).
+    This is NOT the same key as GOOGLE_MAPS_API_KEY used server-side for routing.
+    Restrict this key to: your domain + Places API only.
+    Replace PUBLIC_MAPS_KEY below with your actual public key.
+  -->
+  <script>
+    window.initMap = function() {
+      // Triggered by Google Maps callback — app.js listens for DOMContentLoaded
+      // which fires after this, so no action needed here.
+      console.log('[BLR] Google Maps Places API ready.');
+    };
+  </script>
+  <script
+    src="https://maps.googleapis.com/maps/api/js?key=PUBLIC_MAPS_KEY&libraries=places&callback=initMap&loading=async"
+    async defer
+  ></script>
+
+  <style>
+    /* ═══════════════════════════════════════════════════════
+       DESIGN TOKENS
+    ══════════════════════════════════════════════════════ */
+    :root {
+      --navy-950:   #0a0f1e;
+      --navy-900:   #0f172a;
+      --navy-800:   #1e293b;
+      --navy-700:   #334155;
+      --saffron:    #f97316;
+      --saffron-l:  #fb923c;
+      --saffron-d:  #ea580c;
+      --jade:       #10b981;
+      --jade-l:     #34d399;
+      --red-400:    #f87171;
+      --red-950:    rgba(127,29,29,0.4);
+      --amber-300:  #fcd34d;
+      --amber-950:  rgba(120,53,15,0.4);
+      --slate-100:  #f1f5f9;
+      --slate-200:  #e2e8f0;
+      --slate-300:  #cbd5e1;
+      --slate-400:  #94a3b8;
+      --slate-500:  #64748b;
+      --slate-600:  #475569;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--navy-950);
+      color: var(--slate-200);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Focus ring — WCAG 2.1 AA ── */
+    :focus-visible {
+      outline: 3px solid var(--saffron);
+      outline-offset: 3px;
+      border-radius: 4px;
+    }
+
+    /* ── Touch target minimum ── */
+    .touch-target {
+      min-height: 48px;
+      min-width: 48px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── Skip nav ── */
+    .skip-nav {
+      position: absolute; top: -100%; left: 16px; z-index: 100;
+      background: var(--saffron); color: var(--navy-950);
+      padding: 8px 16px; border-radius: 6px; font-weight: 700;
+      text-decoration: none; font-size: 13px;
+      transition: top .1s;
+    }
+    .skip-nav:focus { top: 12px; }
+
+    /* ══════════════════════════════
+       HEADER
+    ══════════════════════════════ */
+    header {
+      border-bottom: 1px solid var(--navy-700);
+      background: rgba(10,15,30,0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      position: sticky; top: 0; z-index: 40;
+      padding: 14px 20px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-text h1 { font-size: 15px; font-weight: 700; color: var(--slate-200); line-height: 1.2; }
+    .logo-text p  { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--slate-500); margin-top: 2px; }
+
+    .header-right { display: flex; align-items: center; gap: 14px; }
+
+    /* Toggle */
+    .toggle-wrap { display: flex; align-items: center; gap: 8px; }
+    .toggle-label { font-size: 11px; color: var(--slate-400); white-space: nowrap; }
+    .toggle-btn {
+      width: 44px; height: 24px; border-radius: 12px;
+      background: var(--navy-700); border: 2px solid transparent;
+      cursor: pointer; position: relative; transition: background .2s;
+      flex-shrink: 0;
+    }
+    .toggle-btn[aria-checked="true"] { background: var(--saffron); }
+    .toggle-knob {
+      position: absolute; top: 2px; left: 2px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--slate-400); transition: transform .2s, background .2s;
+    }
+    .toggle-btn[aria-checked="true"] .toggle-knob { transform: translateX(20px); background: #fff; }
+
+    /* ══════════════════════════════
+       BANNERS
+    ══════════════════════════════ */
+    .demo-banner {
+      display: none;
+      background: repeating-linear-gradient(45deg,rgba(249,115,22,.07),rgba(249,115,22,.07) 10px,transparent 10px,transparent 20px);
+      border-bottom: 1px solid rgba(249,115,22,.3);
+      padding: 6px 20px;
+      font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--saffron-l);
+    }
+    .demo-banner.visible { display: block; }
+
+    /* Offline banner */
+    .offline-banner {
+      background: rgba(127,29,29,0.3);
+      border-bottom: 1px solid rgba(248,113,113,0.3);
+      padding: 8px 20px; display: none;
+      font-size: 12px; color: var(--red-400);
+    }
+    .offline-banner.visible { display: block; }
+
+    /* PWA install banner */
+    .install-banner {
+      background: var(--navy-800);
+      border-bottom: 1px solid var(--navy-700);
+      padding: 10px 20px;
+      display: flex; align-items: center; gap: 12px; justify-content: space-between;
+    }
+    .install-banner.hidden { display: none; }
+    .install-text { font-size: 12px; color: var(--slate-300); }
+    .install-text strong { color: var(--saffron-l); }
+    .install-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .install-btn {
+      font-size: 12px; font-weight: 600; font-family: inherit;
+      padding: 6px 14px; border-radius: 8px; cursor: pointer; border: none;
+      min-height: 36px;
+    }
+    .install-btn.primary { background: var(--saffron); color: var(--navy-950); }
+    .install-btn.secondary { background: var(--navy-700); color: var(--slate-300); }
+
+    /* ══════════════════════════════
+       LAYOUT
+    ══════════════════════════════ */
+    main { max-width: 700px; margin: 0 auto; padding: 28px 20px 80px; }
+
+    .tagline { font-size: 13px; color: var(--slate-400); line-height: 1.6; margin-bottom: 24px; }
+
+    /* ══════════════════════════════
+       CARDS
+    ══════════════════════════════ */
+    .card {
+      background: var(--navy-900);
+      border: 1px solid var(--navy-700);
+      border-radius: 18px; padding: 24px;
+      margin-bottom: 20px;
+    }
+    .card-title { font-size: 14px; font-weight: 600; color: var(--slate-200); margin-bottom: 20px; }
+
+    /* ══════════════════════════════
+       FORM ELEMENTS
+    ══════════════════════════════ */
+    .field { margin-bottom: 18px; }
+    .field-label {
+      display: block; font-size: 12px; font-weight: 500;
+      color: var(--slate-300); margin-bottom: 6px;
+    }
+    .field-hint { color: var(--slate-500); font-weight: 400; margin-left: 4px; }
+    .hint-text  { font-size: 11px; color: var(--slate-500); margin-top: 4px; }
+
+    .text-input {
+      width: 100%; background: var(--navy-800);
+      border: 1px solid var(--navy-700); color: var(--slate-200);
+      border-radius: 10px; padding: 12px 14px; font-size: 13px;
+      font-family: inherit; outline: none; transition: border-color .2s;
+      min-height: 48px;
+    }
+    .text-input:focus { border-color: var(--saffron); }
+    .text-input::placeholder { color: var(--slate-500); }
+
+    input[type="time"].text-input { width: auto; }
+
+    /* Day buttons */
+    .days { display: flex; flex-wrap: wrap; gap: 8px; }
+    .day-btn {
+      padding: 0 16px; border-radius: 10px;
+      border: 1px solid var(--navy-700); background: var(--navy-800);
+      color: var(--slate-300); font-size: 12px; font-weight: 500;
+      font-family: inherit; cursor: pointer; transition: all .15s;
+    }
+    .day-btn:hover  { border-color: var(--saffron); color: var(--saffron-l); }
+    .day-btn.active { background: var(--saffron); border-color: var(--saffron); color: var(--navy-950); font-weight: 700; }
+
+    /* Slider */
+    .slider-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .slider-label { font-size: 12px; font-weight: 500; color: var(--slate-300); }
+    .slider-val { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 600; color: var(--saffron); }
+
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none;
+      width: 100%; height: 8px; border-radius: 4px;
+      background: var(--navy-700); outline: none; cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 28px; height: 28px;
+      border-radius: 50%; background: var(--saffron);
+      border: 3px solid var(--navy-950); box-shadow: 0 0 0 2px var(--saffron); cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover { box-shadow: 0 0 0 6px rgba(249,115,22,.25); }
+    input[type="range"]::-moz-range-thumb {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--saffron); border: 3px solid var(--navy-950); cursor: pointer;
+    }
+    .slider-ticks { display: flex; justify-content: space-between; font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--slate-500); margin-top: 5px; }
+
+    /* Waypoints */
+    .input-row { display: flex; gap: 8px; align-items: center; }
+    .remove-btn {
+      background: var(--navy-800); border: 1px solid var(--navy-700);
+      color: var(--slate-400); border-radius: 8px; cursor: pointer;
+      font-size: 12px; transition: all .15s; flex-shrink: 0;
+      width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+    }
+    .remove-btn:hover { border-color: var(--red-400); color: var(--red-400); }
+    .waypoint-row { margin-bottom: 12px; }
+
+    .add-waypoint-btn {
+      background: none; border: 1px dashed var(--navy-600, #475569);
+      color: var(--slate-500); border-radius: 10px;
+      padding: 10px 16px; font-size: 12px; font-family: inherit;
+      cursor: pointer; width: 100%; text-align: center; transition: all .15s;
+      min-height: 44px;
+    }
+    .add-waypoint-btn:hover:not(:disabled) { border-color: var(--saffron); color: var(--saffron-l); }
+    .add-waypoint-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* Holiday warning */
+    .holiday-warning {
+      background: var(--amber-950); border: 1px solid rgba(252,211,77,.3);
+      border-radius: 10px; padding: 10px 14px;
+      font-size: 12px; color: var(--amber-300); line-height: 1.5;
+      margin-bottom: 14px;
+    }
+    .holiday-warning.hidden { display: none; }
+
+    /* CTA */
+    .cta {
+      width: 100%; min-height: 52px; border: none; border-radius: 13px;
+      background: var(--saffron); color: var(--navy-950);
+      font-size: 14px; font-weight: 700; font-family: inherit;
+      cursor: pointer; transition: background .15s; margin-top: 6px;
+    }
+    .cta:hover:not(:disabled) { background: var(--saffron-d); }
+    .cta:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* Error */
+    .error-region {
+      background: var(--red-950); border: 1px solid rgba(248,113,113,.4);
+      border-radius: 10px; padding: 10px 14px;
+      font-size: 13px; color: var(--red-400); margin-top: 12px;
+    }
+    .error-region.hidden { display: none; }
+
+    /* ══════════════════════════════
+       RESULTS
+    ══════════════════════════════ */
+    .results-header {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 14px; font-weight: 600; color: var(--slate-200);
+      margin-bottom: 14px;
+    }
+    .cache-badge {
+      font-family: 'JetBrains Mono', monospace; font-size: 10px;
+      color: var(--slate-500); background: var(--navy-800);
+      padding: 2px 8px; border-radius: 4px;
+    }
+    .cache-badge.hidden { display: none; }
+
+    /* Departure curve table */
+    .curve-container {
+      background: var(--navy-900); border: 1px solid var(--navy-700);
+      border-radius: 14px; overflow: hidden; margin-bottom: 14px;
+    }
+    .curve-table-el { width: 100%; border-collapse: collapse; }
+    .curve-th {
+      padding: 10px 12px; font-size: 10px; font-weight: 500;
+      color: var(--slate-500); text-align: left; letter-spacing: .04em;
+      border-bottom: 1px solid var(--navy-700); white-space: nowrap;
+    }
+    .curve-cell { padding: 10px 12px; border-bottom: 1px solid var(--navy-800); }
+    .curve-row:last-child .curve-cell { border-bottom: none; }
+    .curve-row.chosen { background: rgba(249,115,22,.06); }
+    .mono-val  { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--slate-300); }
+    .chosen-val { color: var(--saffron-l); font-weight: 600; }
+    .chosen-tag {
+      display: inline-block; font-size: 9px; font-family: 'JetBrains Mono', monospace;
+      background: rgba(249,115,22,.15); color: var(--saffron-l);
+      border: 1px solid rgba(249,115,22,.3); border-radius: 3px;
+      padding: 1px 5px; margin-left: 6px; vertical-align: middle;
+    }
+    .buffer-val { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; }
+    .buffer-ok   { color: var(--jade-l); }
+    .buffer-late { color: var(--red-400); }
+    .depart-cell { white-space: nowrap; }
+    .curve-note { font-size: 11px; color: var(--slate-500); padding: 8px 12px; border-top: 1px solid var(--navy-800); }
+
+    /* Primary result cards */
+    .results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    @media (max-width: 480px) { .results-grid { grid-template-columns: 1fr; } }
+
+    .result-card {
+      background: var(--navy-900); border: 1px solid var(--navy-700);
+      border-radius: 16px; padding: 18px;
+      opacity: 0; transform: translateY(8px); transition: opacity .3s, transform .3s;
+    }
+    .result-card.visible { opacity: 1; transform: translateY(0); }
+
+    .rc-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .rc-head h3 { font-size: 12px; font-weight: 600; color: var(--slate-200); }
+    .badge { font-family: 'JetBrains Mono', monospace; font-size: 9px; padding: 2px 7px; border-radius: 4px; }
+    .badge-opt { background: rgba(16,185,129,.15); color: var(--jade-l); border: 1px solid rgba(16,185,129,.3); }
+    .badge-bg  { background: rgba(249,115,22,.15);  color: var(--saffron-l); border: 1px solid rgba(249,115,22,.3); }
+    .duration  { font-size: 32px; font-weight: 700; color: var(--slate-100); line-height: 1; }
+    .dist-text { font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--slate-400); margin: 3px 0 10px; }
+
+    .meta-grid { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; }
+    .mk { font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--slate-500); }
+    .mv { font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--slate-300); }
+    .mv-ok   { color: var(--jade-l); font-weight: 600; }
+    .mv-late { color: var(--red-400); font-weight: 600; }
+
+    .progress-bar  { height: 5px; background: var(--navy-800); border-radius: 3px; margin-top: 12px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 3px; transition: width .7s ease; }
+    .fill-ok   { background: var(--jade); }
+    .fill-late { background: var(--red-400); }
+
+    .status-line { font-size: 11px; margin-top: 6px; }
+    .sl-ok   { color: var(--jade-l); }
+    .sl-late { color: var(--red-400); }
+
+    /* Recommendation */
+    .rec-card {
+      background: var(--navy-900);
+      border: 1px solid rgba(16,185,129,.35);
+      border-radius: 16px; padding: 18px; margin-bottom: 14px;
+      opacity: 0; transform: translateY(8px); transition: opacity .35s .1s, transform .35s .1s;
+    }
+    .rec-card.visible { opacity: 1; transform: translateY(0); }
+    .rec-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .rec-head h3 { font-size: 12px; font-weight: 600; color: var(--jade-l); }
+    .rec-main { font-size: 14px; font-weight: 600; color: var(--slate-100); line-height: 1.4; }
+    .rec-sub  { font-size: 12px; color: var(--slate-400); margin-top: 5px; line-height: 1.5; }
+
+    /* Details accordion */
+    details {
+      background: var(--navy-900); border: 1px solid var(--navy-700);
+      border-radius: 14px; overflow: hidden; margin-bottom: 10px;
+    }
+    summary {
+      padding: 14px 18px; font-size: 13px; font-weight: 500; color: var(--slate-300);
+      cursor: pointer; list-style: none; display: flex; justify-content: space-between;
+      align-items: center; min-height: 48px; user-select: none;
+    }
+    summary::-webkit-details-marker { display: none; }
+    .chevron { color: var(--slate-500); font-size: 10px; transition: transform .2s; }
+    details[open] .chevron { transform: rotate(180deg); }
+    .details-body { padding: 0 18px 16px; border-top: 1px solid var(--navy-700); }
+    .detail-row {
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+      padding: 8px 0; border-bottom: 1px solid var(--navy-800); font-size: 11px;
+    }
+    .detail-row:last-child { border-bottom: none; }
+    .dk { color: var(--slate-500); flex-shrink: 0; }
+    .dv { font-family: 'JetBrains Mono', monospace; color: var(--slate-300); text-align: right; }
+
+    /* Results meta */
+    .results-meta { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--slate-500); text-align: right; margin-top: 6px; }
+
+    /* ══════════════════════════════
+       HISTORY PANEL
+    ══════════════════════════════ */
+    .history-section { margin-top: 32px; }
+    .history-header { font-size: 13px; font-weight: 600; color: var(--slate-400); margin-bottom: 10px; letter-spacing: .02em; }
+
+    /* ══════════════════════════════
+       EMPTY STATE
+    ══════════════════════════════ */
+    .empty-state { text-align: center; padding: 64px 20px; }
+    .empty-icon  { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-size: 13px; color: var(--slate-400); }
+    .empty-state small { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--slate-600); display: block; margin-top: 6px; }
+
+    /* ══════════════════════════════
+       SKELETON
+    ══════════════════════════════ */
+    @keyframes shimmer {
+      0%   { background-position: -400px 0; }
+      100% { background-position:  400px 0; }
+    }
+    .skel {
+      background: linear-gradient(90deg, var(--navy-800) 25%, var(--navy-700) 50%, var(--navy-800) 75%);
+      background-size: 800px 100%;
+      animation: shimmer 1.4s infinite linear;
+      border-radius: 5px; display: block;
+    }
+
+    /* ══════════════════════════════
+       FOOTER
+    ══════════════════════════════ */
+    footer { border-top: 1px solid var(--navy-800); padding: 24px 20px; text-align: center; margin-top: 32px; }
+    footer p { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--slate-600); }
+    footer a { color: var(--slate-500); text-decoration: underline; text-underline-offset: 2px; }
+    footer a:hover { color: var(--saffron-l); }
+
+    /* ══════════════════════════════
+       FADE ANIMATION
+    ══════════════════════════════ */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeUp .35s ease forwards; }
+
+    /* ══════════════════════════════
+       REDUCED MOTION
+    ══════════════════════════════ */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+      .result-card, .rec-card { opacity: 1 !important; transform: none !important; }
+    }
+
+    /* ══════════════════════════════
+       GOOGLE PLACES AUTOCOMPLETE OVERRIDE
+    ══════════════════════════════ */
+    .pac-container {
+      background: var(--navy-800) !important;
+      border: 1px solid var(--navy-600, #475569) !important;
+      border-radius: 10px !important;
+      box-shadow: 0 8px 24px rgba(0,0,0,.5) !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      margin-top: 4px !important;
+    }
+    .pac-item {
+      border-top: 1px solid var(--navy-700) !important;
+      color: var(--slate-300) !important;
+      font-size: 13px !important;
+      padding: 10px 14px !important;
+      cursor: pointer !important;
+    }
+    .pac-item:first-child { border-top: none !important; }
+    .pac-item:hover, .pac-item-selected { background: var(--navy-700) !important; }
+    .pac-item-query { color: var(--slate-200) !important; font-weight: 500 !important; }
+    .pac-matched { color: var(--saffron-l) !important; font-weight: 600 !important; }
+    .pac-icon { display: none !important; }
+  </style>
+</head>
+
+<body>
+  <!-- Skip navigation -->
+  <a href="#main-content" class="skip-nav">Skip to main content</a>
+
+  <!-- ══════════════════════════════
+       HEADER
+  ══════════════════════════════ -->
+  <header role="banner">
+    <div class="logo">
+      <span style="font-size:22px" aria-hidden="true">🚗</span>
+      <div class="logo-text">
+        <h1>BLR-CommuteOptimizer</h1>
+        <p>Bengaluru → Okta Office</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="toggle-wrap">
+        <span class="toggle-label" id="demo-toggle-label">Demo</span>
+        <button
+          id="demo-toggle"
+          class="toggle-btn"
+          role="switch"
+          aria-checked="false"
+          aria-labelledby="demo-toggle-label"
+          aria-describedby="demo-desc"
+          onclick="toggleDemoMode()"
+        >
+          <span id="demo-toggle-knob" class="toggle-knob"></span>
+        </button>
+        <span id="demo-desc" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">
+          Demo mode uses static data and disables real Google API calls
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════
+       SYSTEM BANNERS
+  ══════════════════════════════ -->
+  <div id="demo-banner" class="demo-banner" role="status" aria-live="polite">
+    ⚡ DEMO MODE ACTIVE — Static mock data. Real API calls disabled.
+  </div>
+
+  <div id="offline-banner" class="offline-banner" role="alert" aria-live="assertive">
+    📴 You're offline — showing last cached result. Connect to recalculate.
+  </div>
+
+  <!-- PWA Install Prompt -->
+  <div id="install-banner" class="install-banner hidden" role="complementary" aria-label="Install app">
+    <p class="install-text">
+      <strong>Add to home screen</strong> — access your commute window in one tap, works offline.
+    </p>
+    <div class="install-actions">
+      <button class="install-btn primary touch-target" onclick="triggerInstall()" aria-label="Install BLR-CommuteOptimizer">Install</button>
+      <button class="install-btn secondary touch-target" onclick="dismissInstall()" aria-label="Dismiss install prompt">Not now</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       MAIN
+  ══════════════════════════════ -->
+  <main id="main-content" role="main">
+
+    <p class="tagline">Two school drop-offs. One volatile commute. See exactly what leaving 15 minutes earlier costs you — before you're stuck in it.</p>
+
+    <!-- ── INPUT CARD ── -->
+    <section class="card" aria-labelledby="inputs-heading">
+      <h2 id="inputs-heading" class="card-title">Commute Parameters</h2>
+
+      <!-- Origin -->
+      <div class="field">
+        <label for="origin-input" class="field-label">
+          Departure Address
+          <span class="field-hint">(your home)</span>
+        </label>
+        <input
+          type="text"
+          id="origin-input"
+          class="text-input"
+          placeholder="e.g. Indiranagar, Bengaluru, Karnataka"
+          autocomplete="street-address"
+          aria-describedby="origin-hint"
+        />
+        <p id="origin-hint" class="hint-text">Be specific — include neighbourhood and city for accuracy.</p>
+      </div>
+
+      <!-- Destination -->
+      <div class="field">
+        <label for="destination-input" class="field-label">Destination Address</label>
+        <input
+          type="text"
+          id="destination-input"
+          class="text-input"
+          value="Okta India Office, Bengaluru, Karnataka"
+          autocomplete="off"
+          aria-describedby="destination-hint"
+        />
+        <p id="destination-hint" class="hint-text">Pre-filled with Okta Bengaluru. Edit if your office address differs.</p>
+      </div>
+
+      <!-- School stops (waypoints) -->
+      <div class="field">
+        <p class="field-label">
+          School Stops
+          <span class="field-hint">(optional — up to 2 drop-off points)</span>
+        </p>
+        <div id="waypoints-container" aria-label="School stop waypoints"></div>
+        <button
+          id="add-waypoint-btn"
+          type="button"
+          class="add-waypoint-btn touch-target"
+          onclick="addWaypoint()"
+          aria-label="Add a school stop to the route"
+        >+ Add School Stop</button>
+      </div>
+
+      <!-- Day of week -->
+      <div class="field">
+        <fieldset style="border:none">
+          <legend class="field-label">Commute Day</legend>
+          <div class="days" id="day-buttons" role="group" aria-label="Select day of week"></div>
+        </fieldset>
+      </div>
+
+      <!-- Departure time slider -->
+      <div class="field">
+        <div class="slider-row">
+          <label for="departure-slider" class="slider-label">Planned Departure</label>
+          <output id="departure-display" for="departure-slider" class="slider-val" aria-live="polite" aria-atomic="true">7:00 AM</output>
+        </div>
+        <input
+          type="range"
+          id="departure-slider"
+          min="330" max="600" value="420" step="15"
+          class="touch-target"
+          style="min-height:auto;height:8px;margin-top:4px"
+          aria-label="Departure time — currently 7:00 AM"
+          aria-valuemin="5:30 AM"
+          aria-valuemax="10:00 AM"
+          aria-valuenow="7:00 AM"
+          oninput="onSliderInput(this)"
+        />
+        <div class="slider-ticks" aria-hidden="true">
+          <span>5:30 AM</span><span>7:45 AM</span><span>10:00 AM</span>
+        </div>
+        <p class="hint-text" style="margin-top:6px">The tool also calculates −15, −30, and −45 min slots so you see the full departure curve.</p>
+      </div>
+
+      <!-- Required arrival -->
+      <div class="field">
+        <label for="required-arrival" class="field-label">Must Arrive By</label>
+        <input
+          type="time"
+          id="required-arrival"
+          class="text-input"
+          value="09:30"
+          min="06:00"
+          max="12:00"
+          aria-describedby="arrival-hint"
+          style="width:auto"
+        />
+        <p id="arrival-hint" class="hint-text">Your first meeting or office check-in time.</p>
+      </div>
+
+      <!-- Holiday warning (hidden by default) -->
+      <div id="holiday-warning" class="holiday-warning hidden" role="alert" aria-live="polite"></div>
+
+      <!-- Calculate CTA -->
+      <button
+        id="calculate-btn"
+        type="button"
+        onclick="calculateCommute()"
+        aria-busy="false"
+        class="cta touch-target"
+      >
+        <span id="btn-label">Calculate Departure Window</span>
+      </button>
+
+      <!-- Error region -->
+      <div
+        id="error-region"
+        class="error-region hidden"
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
+      ></div>
+    </section>
+
+    <!-- ── RESULTS ── -->
+    <section
+      id="results-panel"
+      class="hidden"
+      aria-labelledby="results-heading"
+      aria-live="polite"
+      aria-atomic="false"
+    >
+      <div class="results-header">
+        <h2 id="results-heading">Departure Window Analysis</h2>
+        <span id="cache-badge" class="cache-badge hidden"></span>
+      </div>
+
+      <!-- Departure curve table -->
+      <div class="curve-container" role="region" aria-labelledby="curve-heading">
+        <p id="curve-heading" style="padding:12px 16px 0;font-size:11px;font-weight:500;color:var(--slate-400);letter-spacing:.03em">4-SLOT DEPARTURE CURVE</p>
+        <div id="curve-table" style="padding:0 0 0 0"></div>
+      </div>
+
+      <!-- Primary result cards -->
+      <div id="results-grid" class="results-grid"></div>
+
+      <!-- Recommendation -->
+      <div
+        id="recommendation-card"
+        class="rec-card"
+        role="region"
+        aria-labelledby="rec-heading"
+      >
+        <div class="rec-head">
+          <span aria-hidden="true">✓</span>
+          <h3 id="rec-heading">Recommended Departure</h3>
+        </div>
+        <div id="recommendation-content"></div>
+      </div>
+
+      <!-- Details accordion -->
+      <details>
+        <summary>
+          Traffic Pattern Details
+          <span class="chevron" aria-hidden="true">▼</span>
+        </summary>
+        <div class="details-body" id="details-panel"></div>
+      </details>
+
+      <p id="results-meta" class="results-meta"></p>
+    </section>
+
+    <!-- ── EMPTY STATE ── -->
+    <div
+      id="empty-state"
+      class="empty-state"
+      aria-label="No commute data yet. Fill in your details above and tap Calculate."
+    >
+      <div class="empty-icon" aria-hidden="true">🗺️</div>
+      <p>Enter your home address above and hit Calculate.</p>
+      <small>No data. No guessing. No wasted minutes.</small>
+    </div>
+
+    <!-- ── HISTORY ── -->
+    <section class="history-section" aria-labelledby="history-heading">
+      <h2 id="history-heading" class="history-header">CALCULATION HISTORY</h2>
+      <div id="history-container"></div>
+    </section>
+
+  </main>
+
+  <!-- ══════════════════════════════
+       FOOTER
+  ══════════════════════════════ -->
+  <footer role="contentinfo">
+    <p>
+      BLR-CommuteOptimizer v2 &nbsp;·&nbsp;
+      <a href="https://github.com/haragonda/BLR-CommuteOptimizer" target="_blank" rel="noopener noreferrer">github.com/haragonda</a>
+      &nbsp;·&nbsp; Google Maps Directions API &nbsp;·&nbsp; WCAG 2.1 AA
+    </p>
+  </footer>
+
+  <!-- App JS (ES module — imports holidays.js, history.js, analytics.js) -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
