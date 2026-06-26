@@ -53,3 +53,5 @@ public/icons/*.ai
 *.pem
 *.key
 *.crt
+
+.vercel
