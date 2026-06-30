@@ -153,10 +153,11 @@ async function handleCommute(req, res) {
     if (result.status !== 'fulfilled') continue;
     const { epoch, model, data, error } = result.value;
     if (!slots[epoch]) slots[epoch] = { epoch };
+    const key = model === 'best_guess' ? 'bestGuess' : model; // normalise to camelCase for client
     if (error) {
-      slots[epoch][model] = { error };
+      slots[epoch][key] = { error };
     } else {
-      slots[epoch][model] = extractDirectionsData(data);
+      slots[epoch][key] = extractDirectionsData(data);
     }
   }
 
