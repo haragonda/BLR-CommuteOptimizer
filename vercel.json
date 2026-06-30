@@ -16,10 +16,7 @@
     { "src": "/api/commute",   "dest": "/api/commute.js" },
     { "src": "/api/analytics", "dest": "/api/commute.js" },
     { "src": "/(.*)",          "dest": "/$1" }
-  ],
-  "env": {
-    "GOOGLE_MAPS_API_KEY": "@google-maps-api-key"
-  },
+  ]
   "headers": [
     {
       "source": "/(.*)",
