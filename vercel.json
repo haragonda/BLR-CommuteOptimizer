@@ -1,31 +1,81 @@
 {
   "version": 2,
-  "name": "blr-commuteoptimizer",
   "builds": [
-    { "src": "api/commute.js", "use": "@vercel/node" },
-    { "src": "index.html",    "use": "@vercel/static" },
-    { "src": "app.js",        "use": "@vercel/static" },
-    { "src": "sw.js",         "use": "@vercel/static" },
-    { "src": "manifest.json", "use": "@vercel/static" },
-    { "src": "holidays.js",   "use": "@vercel/static" },
-    { "src": "history.js",    "use": "@vercel/static" },
-    { "src": "analytics.js",  "use": "@vercel/static" },
-    { "src": "public/**",     "use": "@vercel/static" }
+    {
+      "src": "api/commute.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "app.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "sw.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "manifest.json",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "holidays.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "history.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "analytics.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
+    }
   ],
   "routes": [
-    { "src": "/api/commute",   "dest": "/api/commute.js" },
-    { "src": "/api/analytics", "dest": "/api/commute.js" },
-    { "src": "/(.*)",          "dest": "/$1" }
-  ]
+    {
+      "src": "/api/commute",
+      "dest": "/api/commute.js"
+    },
+    {
+      "src": "/api/analytics",
+      "dest": "/api/commute.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options",  "value": "nosniff" },
-        { "key": "X-Frame-Options",          "value": "DENY" },
-        { "key": "X-XSS-Protection",         "value": "1; mode=block" },
-        { "key": "Referrer-Policy",          "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy",       "value": "geolocation=(), microphone=()" },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "geolocation=(), microphone=()"
+        },
         {
           "key": "Content-Security-Policy",
           "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://maps.googleapis.com https://maps.gstatic.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com https://maps.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://maps.googleapis.com; img-src 'self' data: https://maps.gstatic.com https://maps.googleapis.com; worker-src 'self';"
@@ -35,14 +85,23 @@
     {
       "source": "/sw.js",
       "headers": [
-        { "key": "Cache-Control",  "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Service-Worker-Allowed", "value": "/" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
       ]
     },
     {
       "source": "/api/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "private, max-age=300" }
+        {
+          "key": "Cache-Control",
+          "value": "private, max-age=300"
+        }
       ]
     }
   ]
